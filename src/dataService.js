@@ -57,44 +57,48 @@ const getAllRecordsRaw = () => JSON.parse(localStorage.getItem('eeg_records')) |
 
 // --- PATIENT MANAGEMENT ---
 
-// Returns only the patients linked to the currently active doctor
 export const getPatients = () => {
   const allPatients = getAllPatientsRaw();
   const activeDoctor = getActiveDoctorSession();
   
   if (!activeDoctor) return [];
   
-  // Filter patients so the doctor only sees their own
   return allPatients.filter(p => p.doctorEmail === activeDoctor.email);
 };
 
 export const getPatientById = (id) => getPatients().find(p => p.id === id);
 
-// Tags the new patient with the active doctor's email and calculates a scoped ID
+// MODIFIED: Gap-filling allocation for Patients
 export const addPatient = (patient) => {
   const allPatients = getAllPatientsRaw();
   const activeDoctor = getActiveDoctorSession();
   
   if (activeDoctor) {
-    patient.doctorEmail = activeDoctor.email; // Link patient to this doctor
+    patient.doctorEmail = activeDoctor.email; 
   }
 
-  // Calculate Auto-Increment ID based ONLY on this doctor's patients
+  // Get only this doctor's patients
   const doctorPatients = activeDoctor 
     ? allPatients.filter(p => p.doctorEmail === activeDoctor.email)
     : allPatients;
 
+  // 1. Extract all existing IDs, convert to numbers, remove duplicates, and sort ascending
+  const usedIds = [...new Set(doctorPatients.map(p => {
+    const num = parseInt(String(p.id).replace(/[^0-9]/g, ''), 10);
+    return isNaN(num) ? 0 : num;
+  }))].sort((a, b) => a - b);
+
+  // 2. Find the lowest available gap
   let nextIdNumber = 1;
-  if (doctorPatients.length > 0) {
-    const maxId = Math.max(...doctorPatients.map(p => {
-      // Extract the number from the ID
-      const num = parseInt(String(p.id).replace(/[^0-9]/g, ''), 10);
-      return isNaN(num) ? 0 : num;
-    }));
-    nextIdNumber = maxId + 1;
+  for (let i = 0; i < usedIds.length; i++) {
+    if (usedIds[i] === nextIdNumber) {
+      nextIdNumber++; // Number is taken, check the next one
+    } else if (usedIds[i] > nextIdNumber) {
+      break; // We found a gap!
+    }
   }
   
-  // Assign the scoped ID to the patient (if not already set manually)
+  // Assign the gap-filled ID
   if (!patient.id) {
     patient.id = nextIdNumber.toString(); 
   }
@@ -103,19 +107,22 @@ export const addPatient = (patient) => {
   localStorage.setItem('eeg_patients', JSON.stringify(allPatients));
 };
 
-// Deletes safely from the raw list so other doctors' data isn't lost
+// MODIFIED: Simple delete. No more re-sequencing other patients.
 export const deletePatient = (id) => {
-  const allPatients = getAllPatientsRaw();
-  localStorage.setItem('eeg_patients', JSON.stringify(allPatients.filter(p => p.id !== id)));
-  
-  const allRecords = getAllRecordsRaw();
-  localStorage.setItem('eeg_records', JSON.stringify(allRecords.filter(r => r.patientId !== id)));
+  let allPatients = getAllPatientsRaw();
+  let allRecords = getAllRecordsRaw();
+
+  // Remove only the target patient and their associated records completely
+  allPatients = allPatients.filter(p => p.id !== id);
+  allRecords = allRecords.filter(r => r.patientId !== id);
+
+  localStorage.setItem('eeg_patients', JSON.stringify(allPatients));
+  localStorage.setItem('eeg_records', JSON.stringify(allRecords));
 };
 
 
 // --- RECORD MANAGEMENT ---
 
-// Returns only records for patients that belong to the active doctor
 export const getRecords = () => {
   const allRecords = getAllRecordsRaw();
   const activeDoctor = getActiveDoctorSession();
@@ -129,40 +136,45 @@ export const getRecordsByPatient = (patientId) => getRecords().filter(r => r.pat
 
 export const getRecordById = (id) => getRecords().find(r => r.id === id);
 
-// Calculates REC- ID based ONLY on this doctor's records
+// MODIFIED: Gap-filling allocation for Records (per patient)
 export const addRecord = (record) => {
   const allRecords = getAllRecordsRaw();
   const activeDoctor = getActiveDoctorSession();
   
-  // Link this record to the current doctor
   if (activeDoctor) {
     record.doctorEmail = activeDoctor.email;
   }
   
-  // Get ONLY the records for the current logged-in doctor
-  const doctorRecords = activeDoctor 
-    ? allRecords.filter(r => r.doctorEmail === activeDoctor.email)
-    : allRecords;
+  // Get ONLY the records for this specific patient
+  const patientRecords = allRecords.filter(r => r.patientId === record.patientId);
     
-  // Calculate the next ID based ONLY on this doctor's records
+  // 1. Extract all existing Record IDs, convert to numbers, remove duplicates, sort ascending
+  const usedIds = [...new Set(patientRecords.map(r => {
+    const num = parseInt(String(r.id).replace('REC-', ''), 10);
+    return isNaN(num) ? 0 : num;
+  }))].sort((a, b) => a - b);
+
+  // 2. Find the lowest available gap
   let nextIdNumber = 1; 
-  
-  if (doctorRecords.length > 0) {
-    const maxId = Math.max(...doctorRecords.map(r => {
-      const num = parseInt(String(r.id).replace('REC-', ''), 10);
-      return isNaN(num) ? 0 : num;
-    }));
-    
-    nextIdNumber = maxId + 1; 
+  for (let i = 0; i < usedIds.length; i++) {
+    if (usedIds[i] === nextIdNumber) {
+      nextIdNumber++; // Number is taken, check the next one
+    } else if (usedIds[i] > nextIdNumber) {
+      break; // We found a gap!
+    }
   }
 
-  // Save to the main array with the scoped ID
+  // Save to the main array with the gap-filled ID
   allRecords.push({ ...record, id: 'REC-' + nextIdNumber });
   localStorage.setItem('eeg_records', JSON.stringify(allRecords));
 };
 
-// Deletes safely from the raw list
+// MODIFIED: Simple delete. No more re-sequencing other records.
 export const deleteRecord = (id) => {
   const allRecords = getAllRecordsRaw();
-  localStorage.setItem('eeg_records', JSON.stringify(allRecords.filter(r => r.id !== id)));
+  
+  // Remove only the target record
+  const updatedRecords = allRecords.filter(r => r.id !== id);
+  
+  localStorage.setItem('eeg_records', JSON.stringify(updatedRecords));
 };

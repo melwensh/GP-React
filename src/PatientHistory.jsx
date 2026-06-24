@@ -22,12 +22,26 @@ export default function PatientHistory() {
   const handleFileSelect = (e) => {
     if (e.target.files[0]) {
       setFile(e.target.files[0]);
-      setApiError(''); 
+      setApiError(''); // Clear errors when a new file is selected
     }
   };
 
   const handleAnalyzeAndSave = async () => {
     if (!file) return alert("Please select an EDF file first.");
+    
+    // ---> NEW DUPLICATE FILE VALIDATION <---
+    // Check if the current patient's records already contain this exact file name
+    const isDuplicateFile = records.some(
+      record => record.fileName.toLowerCase() === file.name.toLowerCase()
+    );
+
+    if (isDuplicateFile) {
+      // Use the existing apiError state to show the warning nicely in the modal UI
+      setApiError(`The file "${file.name}" has already been analyzed and saved for this patient.`);
+      return; // Stop execution before sending to the AI model
+    }
+    // ----------------------------------------
+
     if (isAnalyzing) return;
     
     setIsAnalyzing(true);
@@ -117,7 +131,7 @@ export default function PatientHistory() {
 
             {apiError && (
               <div style={{background: '#fef2f2', color: '#991b1b', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.9rem', border: '1px solid #fecaca'}}>
-                <strong>Analysis Failed:</strong> {apiError}
+                <strong>Alert:</strong> {apiError}
               </div>
             )}
 
