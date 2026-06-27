@@ -5,6 +5,7 @@ import Dashboard from './Dashboard';
 import AddPatient from './AddPatient';
 import Profile from './Profile';
 import Navbar from './Navbar';
+import PatientSummary from './PatientSummary';
 // IMPORT NEW FILES
 import PatientHistory from './PatientHistory';
 import RecordView from './RecordView';
@@ -37,6 +38,7 @@ export default function App() {
           {/* NEW ROUTES */}
           <Route path="/patient/:id" element={<PatientHistory />} />
           <Route path="/record/:recordId" element={<RecordView />} />
+          <Route path="/patient/:id/summary" element={<PatientSummary />} />
         </Routes>
       </Layout>
     </BrowserRouter>

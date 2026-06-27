@@ -136,7 +136,7 @@ export const getRecordsByPatient = (patientId) => getRecords().filter(r => r.pat
 
 export const getRecordById = (id) => getRecords().find(r => r.id === id);
 
-// MODIFIED: Gap-filling allocation for Records (per patient)
+// MODIFIED: Gap-filling allocation with Composite ID (P{patientId}-REC-{sequence})
 export const addRecord = (record) => {
   const allRecords = getAllRecordsRaw();
   const activeDoctor = getActiveDoctorSession();
@@ -145,27 +145,26 @@ export const addRecord = (record) => {
     record.doctorEmail = activeDoctor.email;
   }
   
-  // Get ONLY the records for this specific patient
   const patientRecords = allRecords.filter(r => r.patientId === record.patientId);
     
-  // 1. Extract all existing Record IDs, convert to numbers, remove duplicates, sort ascending
   const usedIds = [...new Set(patientRecords.map(r => {
-    const num = parseInt(String(r.id).replace('REC-', ''), 10);
+    const parts = String(r.id).split('-REC-');
+    const num = parseInt(parts[1], 10);
     return isNaN(num) ? 0 : num;
   }))].sort((a, b) => a - b);
 
-  // 2. Find the lowest available gap
   let nextIdNumber = 1; 
   for (let i = 0; i < usedIds.length; i++) {
     if (usedIds[i] === nextIdNumber) {
-      nextIdNumber++; // Number is taken, check the next one
+      nextIdNumber++; 
     } else if (usedIds[i] > nextIdNumber) {
-      break; // We found a gap!
+      break; 
     }
   }
 
-  // Save to the main array with the gap-filled ID
-  allRecords.push({ ...record, id: 'REC-' + nextIdNumber });
+  const formattedId = `P${record.patientId}-REC-${String(nextIdNumber).padStart(2, '0')}`;
+
+  allRecords.push({ ...record, id: formattedId });
   localStorage.setItem('eeg_records', JSON.stringify(allRecords));
 };
 

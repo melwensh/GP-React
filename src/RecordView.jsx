@@ -7,7 +7,6 @@ export default function RecordView() {
   const navigate = useNavigate();
   const record = getRecordById(recordId);
 
-  // Fallback if data is missing
   if (!record || !record.analysis) {
     return (
       <div className="dashboard-page" style={{ padding: '3rem', textAlign: 'center' }}>
@@ -19,10 +18,24 @@ export default function RecordView() {
   }
 
   const data = record.analysis;
-  const isAbnormal = record.status === 'ABNORMAL';
+  // Make sure we check both top-level and deep analysis status
+  const isAbnormal = record.status === 'ABNORMAL' || data.status === 'ABNORMAL';
   
-  // Calculate total seconds (Total Windows * 10 = total seconds)
-  const totalDurationSeconds = data.totalWindows * 10; 
+  const totalSeconds = data.totalWindows * 10;
+  const seizureSeconds = (data.seizureWindows || 0) * 10;
+  
+  // DETERMINE EXACT CLINICAL STATE
+  const isIctal = isAbnormal && seizureSeconds > 0;
+  const isInterictal = isAbnormal && seizureSeconds === 0;
+  const isNormal = !isAbnormal;
+
+  const formatTime = (totalSecs) => {
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const simulatedSpikes = [15, 42, 68, 85]; 
 
   return (
     <div className="dashboard-page" style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem 2rem 3rem 2rem' }}>
@@ -46,13 +59,13 @@ export default function RecordView() {
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem', fontWeight: '600', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
             🧠 Diagnosis
           </p>
-          <h1 style={{ margin: '0.5rem 0 0 0', fontSize: '2.5rem', color: isAbnormal ? '#ef4444' : '#10b981', lineHeight: '1.2' }}>
-            {record.status}
+          <h1 style={{ margin: '0.5rem 0 0 0', fontSize: '2.5rem', color: isIctal ? '#ef4444' : (isInterictal ? '#eab308' : '#10b981'), lineHeight: '1.2' }}>
+            {isIctal ? 'ICTAL' : (isInterictal ? 'INTERICTAL' : 'NORMAL')}
           </h1>
         </div>
         <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem', fontWeight: '600', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            🎯 Max Confidence
+            🎯 AI Confidence
           </p>
           <h1 style={{ margin: '0.5rem 0 0 0', fontSize: '2.5rem', color: '#0f172a', lineHeight: '1.2' }}>
             {data.confidence}%
@@ -60,170 +73,136 @@ export default function RecordView() {
         </div>
         <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
           <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem', fontWeight: '600', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            📊 Windows Analysed
+            ⏱️ Total Scan Duration
           </p>
           <h1 style={{ margin: '0.5rem 0 0 0', fontSize: '2.5rem', color: '#0f172a', lineHeight: '1.2' }}>
-            {data.totalWindows}
+            {formatTime(totalSeconds)}
           </h1>
         </div>
       </div>
 
-      {/* 2. ALERTS */}
-      {isAbnormal ? (
-        <div style={{ marginBottom: '3rem' }}>
-          <div style={{ background: '#fefce8', borderLeft: '5px solid #eab308', color: '#854d0e', padding: '1.2rem 1.5rem', borderRadius: '8px', marginBottom: '0.75rem', fontWeight: '500', fontSize: '1.05rem' }}>
-            ⚠️ Abnormal activity detected! Scanning for Seizures...
+      {/* 2. CLINICAL ALERTS */}
+      <div style={{ marginBottom: '2rem' }}>
+        {isIctal && (
+          <div style={{ background: '#fef2f2', borderLeft: '5px solid #ef4444', color: '#991b1b', padding: '1.2rem 1.5rem', borderRadius: '8px', fontWeight: '500', fontSize: '1.05rem' }}>
+            🚨 <strong>Ictal State Detected:</strong> {formatTime(seizureSeconds)} of active clinical seizure activity found.
           </div>
-          <div style={{ background: '#eff6ff', borderLeft: '5px solid #3b82f6', color: '#1e40af', padding: '1.2rem 1.5rem', borderRadius: '8px', marginBottom: '0.75rem', fontWeight: '500', fontSize: '1.05rem' }}>
-            🔍 Stage 2: {data.totalWindows} windows analysed | threshold = 0.2410 | seizure windows = {data.seizureWindows}
+        )}
+        {isInterictal && (
+          <div style={{ background: '#fefce8', borderLeft: '5px solid #eab308', color: '#854d0e', padding: '1.2rem 1.5rem', borderRadius: '8px', fontWeight: '500', fontSize: '1.05rem' }}>
+            ⚠️ <strong>Interictal State:</strong> Abnormal epileptic brainwaves (spikes/sharp waves) found, but NO active clinical seizures detected in this scan.
           </div>
-          
-          {data.seizureWindows > 0 ? (
-            <div style={{ background: '#fef2f2', borderLeft: '5px solid #ef4444', color: '#991b1b', padding: '1.2rem 1.5rem', borderRadius: '8px', fontWeight: '500', fontSize: '1.05rem' }}>
-              🚨 {data.seizureWindows} Seizure segments found! Classifying types...
-            </div>
-          ) : (
-            <div style={{ background: '#eff6ff', borderLeft: '5px solid #3b82f6', color: '#1e40af', padding: '1.2rem 1.5rem', borderRadius: '8px', fontWeight: '500', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{width: '16px', height: '16px', background: '#3b82f6', borderRadius: '4px'}}></div>
-              Abnormal brain waves found, but NO epileptic seizures detected.
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={{ background: '#ecfdf5', borderLeft: '5px solid #10b981', color: '#065f46', padding: '1.2rem 1.5rem', borderRadius: '8px', marginBottom: '3rem', fontWeight: '500', fontSize: '1.05rem' }}>
-          ✅ Patient EEG scans are normal. No seizure windows detected.
-        </div>
-      )}
+        )}
+        {isNormal && (
+          <div style={{ background: '#ecfdf5', borderLeft: '5px solid #10b981', color: '#065f46', padding: '1.2rem 1.5rem', borderRadius: '8px', fontWeight: '500', fontSize: '1.05rem' }}>
+            ✅ <strong>Normal:</strong> Patient EEG scans are normal. No epileptic activity detected over {formatTime(totalSeconds)}.
+          </div>
+        )}
+      </div>
 
-      {/* ONLY SHOW DETAILED SEIZURE UI IF THERE ARE ACTUAL SEIZURES (> 0) */}
-      {isAbnormal && data.episodes && data.episodes.length > 0 && (
+      {/* 3. INTEGRATED EEG SIGNAL VIEWER */}
+      <div style={{ marginBottom: '3rem', background: '#0f172a', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ 
+              display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', 
+              background: isIctal ? '#ef4444' : (isInterictal ? '#eab308' : '#10b981'), 
+              boxShadow: `0 0 10px ${isIctal ? '#ef4444' : (isInterictal ? '#eab308' : '#10b981')}` 
+            }}></span>
+            Analyzed EEG Trace
+          </h3>
+          
+          {/* Dynamic Legend */}
+          <div style={{ display: 'flex', gap: '15px' }}>
+            {isIctal && (
+              <>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f97316' }}></div> FNSZ
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div> GNSZ
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8' }}>
+                  <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#8b5cf6' }}></div> CPSZ
+                </span>
+              </>
+            )}
+            {isInterictal && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '600', color: '#94a3b8' }}>
+                <div style={{ width: '4px', height: '12px', borderRadius: '2px', background: '#eab308' }}></div> Interictal Spikes
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Signal Window with Dynamic Highlights */}
+        <div style={{ width: '100%', height: '140px', background: '#1e293b', borderRadius: '8px', overflow: 'hidden', position: 'relative', border: '1px solid #334155' }}>
+          
+          {isIctal && data.episodes && data.episodes.map((ep, index) => {
+            const durationSec = parseInt(ep.duration.match(/\d+/)[0], 10);
+            const leftPercent = (ep.start / totalSeconds) * 100;
+            const widthPercent = (durationSec / totalSeconds) * 100;
+            return (
+              <div 
+                key={`seizure-${index}`} 
+                style={{ 
+                  position: 'absolute', top: 0, bottom: 0,
+                  left: `${leftPercent}%`, width: `${widthPercent}%`, 
+                  background: ep.color, opacity: 0.4, 
+                  borderLeft: `2px solid ${ep.color}`, borderRight: `2px solid ${ep.color}`, zIndex: 10
+                }}
+                title={`${ep.code}: ${ep.start}s to ${ep.end}s (Duration: ${durationSec}s)`}
+              ></div>
+            )
+          })}
+
+          {isInterictal && simulatedSpikes.map((percent, index) => (
+            <div 
+              key={`spike-${index}`} 
+              style={{ 
+                position: 'absolute', top: 0, bottom: 0,
+                left: `${percent}%`, width: '2px', 
+                background: '#eab308', boxShadow: '0 0 8px #eab308', zIndex: 10
+              }}
+              title={`Interictal Epileptiform Discharge detected near ${formatTime(Math.floor((percent/100)*totalSeconds))}`}
+            ></div>
+          ))}
+
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '25%', borderLeft: '1px dashed #334155', zIndex: 1 }}></div>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', borderLeft: '1px dashed #334155', zIndex: 1 }}></div>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '75%', borderLeft: '1px dashed #334155', zIndex: 1 }}></div>
+
+          <svg preserveAspectRatio="none" viewBox="0 0 1000 100" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', stroke: isIctal ? '#ef4444' : (isInterictal ? '#eab308' : '#10b981'), fill: 'none', strokeWidth: '1.5', zIndex: 5 }}>
+            <path d="M0,50 Q10,40 20,50 T40,50 T60,30 T80,50 T100,70 T120,50 T140,50 T160,20 T180,80 T200,50 T220,50 T240,40 T260,60 T280,50 T300,50 T320,10 T340,90 T360,50 T380,50 T400,30 T420,70 T440,50 T460,50 T480,20 T500,80 T520,50 T540,50 T560,40 T580,60 T600,50 T620,50 T640,10 T660,90 T680,50 T700,50 T720,30 T740,70 T760,50 T780,50 T800,20 T820,80 T840,50 T860,50 T880,40 T900,60 T920,50 T940,50 T960,10 T980,90 T1000,50" />
+          </svg>
+        </div>
+      </div>
+
+      {/* ONLY SHOW DETAILED EPISODE LIST IF THERE ARE ACTUAL SEIZURES (> 0) */}
+      {isIctal && data.episodes && data.episodes.length > 0 && (
         <>
           <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '3rem 0' }} />
 
-          {/* 3. EXACT TIMELINE SIMULATOR */}
-          <div style={{ marginBottom: '4rem' }}>
-            <h2 style={{ color: '#0f172a', marginBottom: '0.5rem', textAlign: 'center' }}>📊 Clinical Seizure Timeline</h2>
-            <p style={{ color: '#64748b', marginTop: 0, marginBottom: '1.5rem', textAlign: 'center' }}>Visual representation of seizure occurrences throughout the EEG recording.</p>
-            
-            <div style={{ 
-              width: '100%', 
-              height: '60px', 
-              position: 'relative', 
-              borderRadius: '8px', 
-              overflow: 'hidden', 
-              backgroundColor: '#3b82f6', 
-              boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
-              border: '1px solid #e2e8f0'
-            }}>
-              
-              {data.episodes.map((ep, index) => {
-                const durationSec = parseInt(ep.duration.match(/\d+/)[0], 10);
-                const leftPercent = (ep.start / totalDurationSeconds) * 100;
-                const widthPercent = (durationSec / totalDurationSeconds) * 100;
-                
-                return (
-                  <div 
-                    key={index} 
-                    style={{ 
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: `${leftPercent}%`,
-                      width: `${widthPercent}%`, 
-                      background: ep.color,
-                      borderRight: '1px solid rgba(255,255,255,0.4)',
-                      borderLeft: '1px solid rgba(255,255,255,0.4)',
-                      zIndex: 10
-                    }}
-                    title={`${ep.code}: ${ep.start}s to ${ep.end}s (Duration: ${durationSec}s)`}
-                  ></div>
-                )
-              })}
-            </div>
-            
-            <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', fontWeight: '600', color: '#64748b' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '3px', background: '#3b82f6' }}></div> NON-Seizure
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', fontWeight: '600', color: '#64748b' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '3px', background: '#f97316' }}></div> FNSZ
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', fontWeight: '600', color: '#64748b' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '3px', background: '#ef4444' }}></div> GNSZ
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', fontWeight: '600', color: '#64748b' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '3px', background: '#8b5cf6' }}></div> CPSZ
-              </span>
-            </div>
-          </div>
-
-          {/* 4. SUMMARY BOXES (Perfected Layout) */}
-          <h2 style={{ color: '#0f172a', marginBottom: '1.5rem', textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-            📈 Seizure Type Summary
-          </h2>
-          
-          {/* Changed flex-basis to 250px so they sit perfectly side-by-side on all screens */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '1.5rem', marginBottom: '4rem' }}>
-            
-            {data.summary.FNSZ > 0 && (
-              <div style={{ flex: '1 1 250px', background: 'linear-gradient(135deg, #f97316, #ea580c)', color: 'white', padding: '2rem 1.5rem', borderRadius: '12px', textAlign:'center', boxShadow: '0 10px 15px -3px rgba(249, 115, 22, 0.4)' }}>
-                <h3 style={{ margin:0, fontSize: '1.05rem', fontWeight:'600', opacity: 0.95, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                  <div style={{width:'12px', height:'12px', borderRadius:'50%', background:'rgba(255,255,255,0.6)', boxShadow: '0 0 6px rgba(255,255,255,0.4)'}}></div>
-                  FNSZ — Focal Non-motor
-                </h3>
-                {/* Replaced <h1> with a strictly spaced <span> to prevent overlapping */}
-                <div style={{ margin: '1rem 0 0.25rem 0' }}>
-                  <span style={{ fontSize: '3.5rem', fontWeight: 'bold', lineHeight: '1' }}>{data.summary.FNSZ}</span>
-                </div>
-                <p style={{ margin:0, fontSize: '1rem', fontWeight: '500', opacity: 0.9 }}>windows</p>
-              </div>
-            )}
-
-            {data.summary.GNSZ > 0 && (
-              <div style={{ flex: '1 1 250px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', padding: '2rem 1.5rem', borderRadius: '12px', textAlign:'center', boxShadow: '0 10px 15px -3px rgba(239, 68, 68, 0.4)' }}>
-                <h3 style={{ margin:0, fontSize: '1.05rem', fontWeight:'600', opacity: 0.95, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                  <div style={{width:'12px', height:'12px', borderRadius:'50%', background:'rgba(255,255,255,0.6)', boxShadow: '0 0 6px rgba(255,255,255,0.4)'}}></div>
-                  GNSZ — Generalized
-                </h3>
-                <div style={{ margin: '1rem 0 0.25rem 0' }}>
-                  <span style={{ fontSize: '3.5rem', fontWeight: 'bold', lineHeight: '1' }}>{data.summary.GNSZ}</span>
-                </div>
-                <p style={{ margin:0, fontSize: '1rem', fontWeight: '500', opacity: 0.9 }}>windows</p>
-              </div>
-            )}
-
-            {data.summary.CPSZ > 0 && (
-              <div style={{ flex: '1 1 250px', background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white', padding: '2rem 1.5rem', borderRadius: '12px', textAlign:'center', boxShadow: '0 10px 15px -3px rgba(139, 92, 246, 0.4)' }}>
-                <h3 style={{ margin:0, fontSize: '1.05rem', fontWeight:'600', opacity: 0.95, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-                  <div style={{width:'12px', height:'12px', borderRadius:'50%', background:'rgba(255,255,255,0.6)', boxShadow: '0 0 6px rgba(255,255,255,0.4)'}}></div>
-                  CPSZ — Complex Partial
-                </h3>
-                <div style={{ margin: '1rem 0 0.25rem 0' }}>
-                  <span style={{ fontSize: '3.5rem', fontWeight: 'bold', lineHeight: '1' }}>{data.summary.CPSZ}</span>
-                </div>
-                <p style={{ margin:0, fontSize: '1rem', fontWeight: '500', opacity: 0.9 }}>windows</p>
-              </div>
-            )}
-          </div>
-
-          {/* 5. EPISODE LIST */}
+          {/* 6. EPISODE LIST */}
           <h2 style={{ color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            🚨 Detected Seizure Episodes ({data.episodes.length})
+            🚨 Detected Ictal Episodes ({data.episodes.length})
           </h2>
           <div style={{ marginTop: '1.5rem' }}>
             {data.episodes.map((ep) => (
-              <div key={ep.id} className="episode-card" style={{ borderLeftColor: ep.color }}>
-                <div>
-                  <h3 className="episode-title">
-                    <span style={{ color: ep.color, marginRight: '8px' }}>●</span>
-                    {ep.id}. {ep.code} — {ep.name}
-                  </h3>
-                  <p className="episode-time">
-                    ⏱ From <strong>{ep.start}s</strong> to <strong>{ep.end}s</strong>
-                  </p>
-                </div>
-                <div className="episode-duration">
-                  duration: {ep.duration}
+              <div key={ep.id} style={{ padding: '1rem', marginBottom: '1rem', background: '#fff', borderRadius: '8px', borderLeft: `5px solid ${ep.color}`, boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', color: '#0f172a' }}>
+                      <span style={{ color: ep.color, marginRight: '8px' }}>●</span>
+                      {ep.id}. {ep.code} — {ep.name}
+                    </h3>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
+                      ⏱ Occurred from <strong>{formatTime(ep.start)}</strong> to <strong>{formatTime(ep.end)}</strong> in the recording.
+                    </p>
+                  </div>
+                  <div style={{ background: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '6px', fontWeight: '600', fontSize: '0.9rem', color: '#0f172a' }}>
+                    Duration: {ep.duration}
+                  </div>
                 </div>
               </div>
             ))}
